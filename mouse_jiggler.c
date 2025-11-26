@@ -5,24 +5,12 @@
 #include <mouse_jiggler_icons.h>
 
 #define APP_VERSION "1.1"
-#define USB_RETRY_DELAY_MS 200
-
-typedef enum {
-    EventTypeInput,
-} EventType;
 
 typedef enum {
     UsbStateSwitching,
     UsbStateActive,
     UsbStateError,
 } UsbState;
-
-typedef struct {
-    union {
-        InputEvent input;
-    };
-    EventType type;
-} UsbMouseEvent;
 
 static void mouse_jiggler_render_callback(Canvas* canvas, void* ctx) {
     UsbState* state = ctx;
@@ -56,12 +44,9 @@ static void mouse_jiggler_render_callback(Canvas* canvas, void* ctx) {
 
 static void mouse_jiggler_input_callback(InputEvent* input_event, void* ctx) {
     FuriMessageQueue* event_queue = ctx;
-
-    UsbMouseEvent event;
-    event.type = EventTypeInput;
-    event.input = *input_event;
-    furi_message_queue_put(event_queue, &event, FuriWaitForever);
+    furi_message_queue_put(event_queue, input_event, FuriWaitForever);
 }
+
 static void mouse_jiggler_jiggle(void* ctx) {
 	UNUSED(ctx);
 	
@@ -88,10 +73,11 @@ static void mouse_jiggler_jiggle(void* ctx) {
     horizontal_current_cycle++;
     vertical_current_cycle++;
 }
+
 int32_t mouse_jiggler_app(void* p) {
     UNUSED(p);
 
-    FuriMessageQueue* event_queue = furi_message_queue_alloc(8, sizeof(UsbMouseEvent));
+    FuriMessageQueue* event_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
     furi_check(event_queue);
 
     ViewPort* view_port = view_port_alloc();
@@ -110,17 +96,13 @@ int32_t mouse_jiggler_app(void* p) {
 
     bool usb_switch_success = false;
 
-    UsbMouseEvent event;
+    InputEvent event;
 
     while(1) {
         FuriStatus event_status = furi_message_queue_get(event_queue, &event, usb_switch_success ? FuriWaitForever : 100);
         
-        if(event_status == FuriStatusOk) {
-            if(event.type == EventTypeInput) {
-                if((event.input.type == InputTypeLong) && (event.input.key == InputKeyBack)) {
-                    break;
-                }
-            }
+        if(event_status == FuriStatusOk && event.type == InputTypeLong && event.key == InputKeyBack) {
+            break;
         }
 
         if(!usb_switch_success) {
@@ -130,7 +112,7 @@ int32_t mouse_jiggler_app(void* p) {
                 furi_timer_start(timer, 3);
             } else {
                 app_state = UsbStateError;
-                furi_delay_ms(USB_RETRY_DELAY_MS);
+                furi_delay_ms(200);
             }
         }
 
