@@ -4,7 +4,7 @@
 #include <input/input.h>
 #include <mouse_jiggler_icons.h>
 
-#define APP_VERSION "1.0"
+#define APP_VERSION "1.1"
 
 typedef enum {
     EventTypeInput,
