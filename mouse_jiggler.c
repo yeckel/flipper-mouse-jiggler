@@ -30,7 +30,7 @@ static void mouse_jiggler_render_callback(Canvas* canvas, void* ctx) {
     canvas_draw_str(canvas, 94, 9, APP_VERSION);
 
     canvas_set_font(canvas, FontSecondary);
-    
+
     switch(app_ctx->state) {
         case UsbStateSwitching:
             canvas_draw_str(canvas, 0, 33, "Switching to HID mode...");
@@ -60,22 +60,22 @@ static void mouse_jiggler_input_callback(InputEvent* input_event, void* ctx) {
 }
 
 static void mouse_jiggler_jiggle(void* ctx) {
-	UNUSED(ctx);
-	
+    UNUSED(ctx);
+
     static short horizontal_travel_dist = 0;
-	static short horizontal_movement_cycles = 0;
-	static short horizontal_current_cycle = 0;
+    static short horizontal_movement_cycles = 0;
+    static short horizontal_current_cycle = 0;
     static short vertical_travel_dist = 0;
-	static short vertical_movement_cycles = 0;
-	static short vertical_current_cycle = 0;
+    static short vertical_movement_cycles = 0;
+    static short vertical_current_cycle = 0;
 
     if(horizontal_current_cycle >= horizontal_movement_cycles) {
         horizontal_travel_dist = furi_hal_random_get() % 3 - 1;
         horizontal_movement_cycles = furi_hal_random_get() % 1000 + 1;
         horizontal_current_cycle = 0;
     }
-	
-	if(vertical_current_cycle >= vertical_movement_cycles) {
+
+    if(vertical_current_cycle >= vertical_movement_cycles) {
         vertical_travel_dist = furi_hal_random_get() % 3 - 1;
         vertical_movement_cycles = furi_hal_random_get() % 1000 + 1;
         vertical_current_cycle = 0;
