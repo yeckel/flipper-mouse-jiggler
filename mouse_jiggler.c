@@ -5,6 +5,7 @@
 #include <mouse_jiggler_icons.h>
 
 #define APP_VERSION "1.1"
+#define ERROR_MESSAGE_ROTATE_MS 5000
 
 typedef enum {
     UsbStateSwitching,
@@ -12,8 +13,14 @@ typedef enum {
     UsbStateError,
 } UsbState;
 
+typedef struct {
+    UsbState state;
+    bool show_unplug_message;
+    uint32_t last_message_switch_tick;
+} MouseJigglerContext;
+
 static void mouse_jiggler_render_callback(Canvas* canvas, void* ctx) {
-    UsbState* state = ctx;
+    MouseJigglerContext* app_ctx = ctx;
     canvas_clear(canvas);
 
     canvas_draw_icon(canvas, 0, 0, &I_mouse_jiggler);
@@ -24,14 +31,19 @@ static void mouse_jiggler_render_callback(Canvas* canvas, void* ctx) {
 
     canvas_set_font(canvas, FontSecondary);
     
-    switch(*state) {
+    switch(app_ctx->state) {
         case UsbStateSwitching:
             canvas_draw_str(canvas, 0, 33, "Switching to HID mode...");
             canvas_draw_str(canvas, 0, 43, "Please wait");
             break;
         case UsbStateError:
-            canvas_draw_str(canvas, 0, 33, "Switch to HID mode failed");
-            canvas_draw_str(canvas, 0, 43, "Retrying...");
+            if(app_ctx->show_unplug_message) {
+                canvas_draw_str(canvas, 0, 33, "Try unplugging your Flipper");
+                canvas_draw_str(canvas, 0, 43, "and plug it in again");
+            } else {
+                canvas_draw_str(canvas, 0, 33, "Switch to HID mode failed");
+                canvas_draw_str(canvas, 0, 43, "Retrying...");
+            }
             break;
         case UsbStateActive:
         default:
@@ -85,9 +97,13 @@ int32_t mouse_jiggler_app(void* p) {
     FuriTimer* timer = furi_timer_alloc(mouse_jiggler_jiggle, FuriTimerTypePeriodic, event_queue);
 
     FuriHalUsbInterface* usb_mode_prev = furi_hal_usb_get_config();
-    UsbState app_state = UsbStateSwitching;
+    MouseJigglerContext app_ctx = {
+        .state = UsbStateSwitching,
+        .show_unplug_message = false,
+        .last_message_switch_tick = 0,
+    };
 
-    view_port_draw_callback_set(view_port, mouse_jiggler_render_callback, &app_state);
+    view_port_draw_callback_set(view_port, mouse_jiggler_render_callback, &app_ctx);
     view_port_input_callback_set(view_port, mouse_jiggler_input_callback, event_queue);
 
     // Open GUI and register view_port
@@ -108,11 +124,22 @@ int32_t mouse_jiggler_app(void* p) {
         if(!usb_switch_success) {
             if(furi_hal_usb_set_config(&usb_hid, NULL)) {
                 usb_switch_success = true;
-                app_state = UsbStateActive;
+                app_ctx.state = UsbStateActive;
                 furi_timer_start(timer, 3);
             } else {
-                app_state = UsbStateError;
+                if(app_ctx.state != UsbStateError) {
+                    app_ctx.last_message_switch_tick = furi_get_tick();
+                }
+                app_ctx.state = UsbStateError;
                 furi_delay_ms(200);
+            }
+        }
+
+        if(app_ctx.state == UsbStateError) {
+            uint32_t now = furi_get_tick();
+            if((now - app_ctx.last_message_switch_tick) >= ERROR_MESSAGE_ROTATE_MS) {
+                app_ctx.show_unplug_message = !app_ctx.show_unplug_message;
+                app_ctx.last_message_switch_tick = now;
             }
         }
 
