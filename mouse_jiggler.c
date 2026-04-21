@@ -4,7 +4,7 @@
 #include <input/input.h>
 #include <mouse_jiggler_icons.h>
 
-#define APP_VERSION "1.1"
+#define APP_VERSION "1.2"
 #define ERROR_MESSAGE_ROTATE_MS 5000
 
 typedef enum {
@@ -15,6 +15,7 @@ typedef enum {
 
 typedef struct {
     UsbState state;
+    bool paused;
     bool show_unplug_message;
     uint32_t last_message_switch_tick;
 } MouseJigglerContext;
@@ -47,8 +48,13 @@ static void mouse_jiggler_render_callback(Canvas* canvas, void* ctx) {
             break;
         case UsbStateActive:
         default:
-            canvas_draw_str(canvas, 0, 33, "GitHub.com/DavidBerdik/");
-            canvas_draw_str(canvas, 0, 43, "flipper-mouse-jiggler");
+            if(app_ctx->paused) {
+                canvas_draw_str(canvas, 0, 33, "** PAUSED **");
+                canvas_draw_str(canvas, 0, 43, "Press [OK] to resume");
+            } else {
+                canvas_draw_str(canvas, 0, 33, "Jiggling...");
+                canvas_draw_str(canvas, 0, 43, "Press [OK] to pause");
+            }
     }
 
     canvas_draw_str(canvas, 0, 63, "Hold [back] to exit");
@@ -99,6 +105,7 @@ int32_t mouse_jiggler_app(void* p) {
     FuriHalUsbInterface* usb_mode_prev = furi_hal_usb_get_config();
     MouseJigglerContext app_ctx = {
         .state = UsbStateSwitching,
+        .paused = false,
         .show_unplug_message = false,
         .last_message_switch_tick = 0,
     };
@@ -119,6 +126,20 @@ int32_t mouse_jiggler_app(void* p) {
         
         if(event_status == FuriStatusOk && event.type == InputTypeLong && event.key == InputKeyBack) {
             break;
+        }
+
+        if(event_status == FuriStatusOk && event.type == InputTypeShort && event.key == InputKeyOk) {
+            if(app_ctx.state == UsbStateActive) {
+                if(!app_ctx.paused) {
+                    if(furi_timer_stop(timer) == FuriStatusOk) {
+                        app_ctx.paused = true;
+                    }
+                } else {
+                    if(furi_timer_start(timer, 3) == FuriStatusOk) {
+                        app_ctx.paused = false;
+                    }
+                }
+            }
         }
 
         if(!usb_switch_success) {
@@ -146,6 +167,7 @@ int32_t mouse_jiggler_app(void* p) {
         view_port_update(view_port);
     }
 
+    furi_timer_stop(timer);
     furi_hal_usb_set_config(usb_mode_prev, NULL);
 
     // remove & free all stuff created by app
